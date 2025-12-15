@@ -1,0 +1,13 @@
+datasets
+radon
+matplotlib
+seaborn
+pandas
+numpy
+scipy
+transformers
+torch
+scikit-learn
+umap-learn
+pandas
+tqdm
