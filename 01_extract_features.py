@@ -92,20 +92,27 @@ def extract_features(code):
         return pd.Series({k: (code if k == 'code' else 0) for k in ["code", "author_type", "loc", "avg_line_len", "comment_density", "indent_depth", "function_count", "var_name_len", "avg_cyclomatic", "total_cyclomatic"]})
 
 
+# REVISED if __name__ == "__main__": block for 01_extract_features.py
+
 if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     print("\n--- 1. Loading and Structuring Data ---")
-    df = load_and_structure_data()
+    df = load_and_structure_data() # df now contains 'author_type', 'model', and 'code'
     
     # --- Feature Extraction with Progress Bar ---
     print("\n--- 2. Starting Feature Extraction (Structural and Complexity Metrics) ---")
     
-    # Apply features, but keep original 'author_type'
-    features_df = df["code"].progress_apply(extract_features)
+    # Apply features. features_df contains the extracted metrics.
+    features_df = df["code"].progress_apply(extract_features) 
     
-    # Drop the original 'code' column from df, then concatenate
-    df = df.drop(columns=['code']).reset_index(drop=True)
-    df = pd.concat([df, features_df.drop(columns=['code', 'author_type'])], axis=1)
+    # We no longer need to drop 'code' from df, but we need to select 
+    # the new columns from features_df and combine them with the original df.
+    
+    # Identify the new metric columns created by extract_features (excluding 'code' and 'author_type' if present)
+    new_metric_cols = [col for col in features_df.columns if col not in ['code', 'author_type']]
+    
+    # Concatenate the new metric columns to the original df
+    df = pd.concat([df.reset_index(drop=True), features_df[new_metric_cols].reset_index(drop=True)], axis=1)
 
     # Normalization
     df["complexity_per_100_loc"] = (df["total_cyclomatic"] / df["loc"]) * 100
@@ -113,6 +120,8 @@ if __name__ == "__main__":
     
     # Save the data
     output_cols = ['author_type', 'code', 'loc', 'avg_line_len', 'comment_density', 'indent_depth', 'function_count', 'var_name_len', 'avg_cyclomatic', 'total_cyclomatic', 'complexity_per_100_loc', 'funcs_per_100_loc']
-    df[output_cols].to_csv("results/features_only.csv", index=False)
+    
+    # This line will now work because 'code' has been retained in df
+    df[output_cols].to_csv("results/structural_features.csv", index=False)
 
-    print(f"\nData processing complete. Structural features saved to results/features_only.csv ({len(df)} records).")
+    print(f"\nData processing complete. Structural features saved to results/structural_features.csv ({len(df)} records).")
