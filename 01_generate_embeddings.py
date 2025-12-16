@@ -58,9 +58,9 @@ if __name__ == "__main__":
     
     # Load data from the first script
     try:
-        df = pd.read_csv("results/structural_features.csv.csv")
+        df = pd.read_csv("results/structural_features.csv")
     except FileNotFoundError:
-        print("\nERROR: Could not find 'results/structural_features.csv.csv'.")
+        print("\nERROR: Could not find 'results/structural_features.csv'.")
         print("Please run 01_extract_features.py first.")
         exit()
 
