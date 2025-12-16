@@ -15,34 +15,24 @@ warnings.filterwarnings("ignore", category=FutureWarning, module='seaborn')
 
 try:
     # 1. Load Structural Features (Full Dataset)
+    # This file MUST contain the grouping columns ('author_type' and 'model').
     df_struct = pd.read_csv("results/structural_features.csv")
+    
+    # We create an 'id' column, though it's not strictly necessary if we aren't merging
+    # However, keeping it can be useful for diagnostics.
     df_struct['id'] = df_struct.index 
     
-    # 2. Load Sample Embedding Features (Only Sample)
-    df_embed_sample = pd.read_csv("results/sample_embeddings.csv")
-    
-    # Check if the sample file exists, if not, create a placeholder for UMAP
-    if 'UMAP 1' not in df_embed_sample.columns:
-         print("\nWARNING: Sample embedding data is incomplete. UMAP plot will fail.")
-    
     print(f"Loaded structural features (full set): {len(df_struct)} records.")
-    print(f"Loaded embedding features (sample set): {len(df_embed_sample)} records.")
 
-    # Merge the structural features with the embedding sample features on the generated ID
-    df_final = pd.merge(
-        df_struct, 
-        df_embed_sample[['id', 'UMAP 1', 'UMAP 2']], 
-        on='id', 
-        how='left' 
-    )
-    df_final = df_final.drop(columns=['id'])
-
-    # df_boxplot_umap: Full structural data for box plots, filtered embedding data for UMAP
+    # --- SIMPLIFICATION: Removed the merge operation ---
+    # Since UMAP data is now handled separately, the final data for box plots
+    # is just the structural data.
+    df_final = df_struct.copy() 
+    
+    # df_boxplot: The full structural dataset (used for violin plots)
     df_boxplot = df_final 
-    df_umap = df_final.dropna(subset=['UMAP 1', 'UMAP 2'])
 
     print(f"Data prepared for Box Plots (full set): {len(df_boxplot)} records.")
-    print(f"Data prepared for UMAP Plot (sample set): {len(df_umap)} records.")
     
 except FileNotFoundError as e:
     print(f"\nERROR: Could not find required file: {e.filename}")
@@ -148,39 +138,6 @@ def plot_violin_vs_model(data, metric, title, filename):
     print(f"  - Saved {filename}")
 
 
-def plot_umap(data, hue_col='author_type', filename="umap_clustering_authortype.png", title_suffix="Author Type"):
-    """
-    Generates a UMAP scatter plot, configurable by 'author_type' or 'model'.
-    """
-    if data.empty:
-        print(f"\nSkipping UMAP plot ({hue_col}): Sample data is empty.")
-        return
-        
-    plt.figure(figsize=(10, 8))
-    
-    # Define distinct color palettes for the two plots
-    if hue_col == 'author_type':
-        palette = {'human': 'darkorange', 'ai': 'dodgerblue'}
-    else: # hue_col == 'model'
-        # Human/AI Model Colors: Human is orange, AIs are shades of blue/green/red
-        palette = {'human': '#FF9900', 'chatgpt': '#007ACC', 'deepseek': '#4CAF50', 'qwen': '#F44336'} 
-
-    sns.scatterplot(
-        x='UMAP 1', 
-        y='UMAP 2', 
-        hue=hue_col, 
-        data=data, 
-        palette=palette,
-        s=20, 
-        alpha=0.6,
-    )
-    plt.title(f'Code Style Clustering (UMAP) - Colored by {title_suffix} (Sampled Data)', fontweight='bold')
-    plt.legend(title=title_suffix)
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, filename), dpi=300)
-    plt.close()
-    print(f"  - Saved {filename}") 
-
 # --- Main loop to generate visualizations ---
 
 # 1. Violin Plots (Human vs AI) - Uses the full structural dataset (df_boxplot)
@@ -196,14 +153,5 @@ for metric, title in VIZ_METRICS:
     filename = f"{metric.replace('_per_100_loc', '_norm').lower()}_violin_model.png"
     plot_violin_vs_model(df_boxplot, metric, title, filename)
 
-
-# 3. UMAP Plot (Author Type - Human vs AI) - Uses the sampled embedding dataset (df_umap)
-print("\n--- Generating Embedding Plot (UMAP by Author Type) ---")
-plot_umap(df_umap, hue_col='author_type', filename="umap_clustering_authortype.png", title_suffix="Author Type (Human vs AI)")
-
-
-# 4. UMAP Plot (Model - Human vs 3 AIs) - Uses the sampled embedding dataset (df_umap)
-print("\n--- Generating Embedding Plot (UMAP by Specific Model) ---")
-plot_umap(df_umap, hue_col='model', filename="umap_clustering_model.png", title_suffix="Specific Model (Human vs 3 AIs)")
 
 print("\nVisualization complete. 14 charts saved as individual PNG files.")
