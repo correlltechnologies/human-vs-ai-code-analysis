@@ -105,9 +105,6 @@ if __name__ == "__main__":
     # Apply features. features_df contains the extracted metrics.
     features_df = df["code"].progress_apply(extract_features) 
     
-    # We no longer need to drop 'code' from df, but we need to select 
-    # the new columns from features_df and combine them with the original df.
-    
     # Identify the new metric columns created by extract_features (excluding 'code' and 'author_type' if present)
     new_metric_cols = [col for col in features_df.columns if col not in ['code', 'author_type']]
     
@@ -119,7 +116,8 @@ if __name__ == "__main__":
     df["funcs_per_100_loc"] = (df["function_count"] / df["loc"]) * 100
     
     # Save the data
-    output_cols = ['author_type', 'code', 'loc', 'avg_line_len', 'comment_density', 'indent_depth', 'function_count', 'var_name_len', 'avg_cyclomatic', 'total_cyclomatic', 'complexity_per_100_loc', 'funcs_per_100_loc']
+    # >>>>> CRITICAL CHANGE: Added 'model' to output_cols <<<<<
+    output_cols = ['author_type', 'model', 'code', 'loc', 'avg_line_len', 'comment_density', 'indent_depth', 'function_count', 'var_name_len', 'avg_cyclomatic', 'total_cyclomatic', 'complexity_per_100_loc', 'funcs_per_100_loc']
     
     # This line will now work because 'code' has been retained in df
     df[output_cols].to_csv("results/structural_features.csv", index=False)
