@@ -13,3 +13,4 @@ pandas
 tqdm
 psutil
 joblib
+openai
