@@ -1,4 +1,4 @@
-# Save this as 02_generate_embeddings_sample.py
+# Save this as 02_generate_embeddings_sample.py (CPU Parallelized)
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,7 @@ import os
 import warnings
 import psutil
 import sys
+from joblib import Parallel, delayed # <--- NEW IMPORT
 
 # Suppress PyTorch/Seaborn warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -25,55 +26,60 @@ if NUM_THREADS is None:
 os.environ['OMP_NUM_THREADS'] = str(NUM_THREADS) 
 os.environ['MKL_NUM_THREADS'] = str(NUM_THREADS) 
 torch.set_num_threads(NUM_THREADS)
+
+# IMPORTANT: Set the number of jobs for joblib to use (10 cores)
+N_JOBS = NUM_THREADS
 print(f"Set PyTorch/MKL thread count to: {NUM_THREADS} cores.")
+print(f"Embedding generation will use {N_JOBS} parallel workers.")
 # --- End Optimization ---
 
 
-# Embedding Model Setup
+# Embedding Model Setup (Model and tokenizer must be loaded within each parallel process)
 MODEL_NAME = "microsoft/codebert-base" 
 print(f"Loading embedding model: {MODEL_NAME}...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModel.from_pretrained(MODEL_NAME)
-model.eval()
 
-# Updated get_code_embedding function
+# WARNING: We must ensure the model is loaded on CPU and initialized *once* per process.
+# We will define a function that does the loading, and joblib will handle the rest.
 
-def get_code_embedding(code, model=model, tokenizer=tokenizer):
+# Function to initialize model/tokenizer (will be run inside each joblib worker)
+def init_model():
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = AutoModel.from_pretrained(MODEL_NAME)
+    # Ensure it's on CPU and evaluation mode
+    model.to(torch.device("cpu"))
+    model.eval()
+    return tokenizer, model
+
+# Single-sample embedding function (now accepts model/tokenizer)
+def get_code_embedding(code, tokenizer, model):
     """Generates a dense vector representation of the code."""
     try:
         inputs = tokenizer(code, return_tensors="pt", padding=True, truncation=True, max_length=512)
         
-        # --- FIX: ALWAYS USE CPU FOR STABILITY ---
-        # We will not check for CUDA, as the error is likely happening during device transfer.
+        # Device is explicitly CPU here
         device = torch.device("cpu") 
-        
         inputs = {k: v.to(device) for k, v in inputs.items()}
-        model.to(device) # Ensure the model is on CPU
         
         with torch.no_grad():
             outputs = model(**inputs)
         
-        # Use Mean Pooling of the last hidden state
         embedding = outputs.last_hidden_state.mean(dim=1).squeeze().cpu().numpy()
         return embedding
         
     except Exception as e:
+        # Note: Added error logging for debugging
         print(f"\nEmbedding generation failed for a code snippet. Error: {e}")
-        # Return zeros for any embedding failure
         return np.zeros(model.config.hidden_size)
+
 
 def create_stratified_sample(df, sample_fraction=1/16):
     """
-    Creates a sample that is evenly stratified across all 'model' types 
-    (human, chatgpt, deepseek, qwen).
+    Creates a sample that is evenly stratified across all 'model' types.
     """
     if 'model' not in df.columns:
-        # Fall back to simple random sampling if 'model' column is missing
         print("Warning: 'model' column not found for stratification. Using simple random sample.")
         return df.sample(frac=sample_fraction, random_state=42)
     
-    # Stratified sampling logic based on the 'model' column
-    # We use sample(frac) on the grouped data to maintain the proportions
     df_sample = (
         df.groupby('model', group_keys=False)
         .apply(lambda x: x.sample(frac=sample_fraction, random_state=42))
@@ -95,32 +101,40 @@ if __name__ == "__main__":
 
     # --- Sample the data (1/16th of the data) ---
     print(f"\nTotal records: {len(df)}")
-    # The sample_fraction is now 1/16.0 as requested
     df_sample = create_stratified_sample(df, sample_fraction=1/16.0) 
     print(f"Sampled records (approx. 1/16th): {len(df_sample)}")
 
-    # Add a temporary ID for merging back later. The ID needs to be consistent with the 
-    # structural file's index if you rely on the index for merging in the visualization script.
-    # Since we loaded the whole file, the original index is lost. We must use the original index 
-    # values if they were saved, or create a unique identifier if they were not.
-    
-    # Since the sample is a subset, we will use the index values of the original df 
-    # which represent the 'id' saved in the structural_features.csv (implicit index)
-    
-    # Re-aligning the IDs based on the original index of the loaded dataframe:
     df_sample['id'] = df_sample.index 
     df_sample = df_sample.dropna(subset=['code'])
 
 
-    # --- Embedding Generation with Progress Bar ---
-    print("\n--- 3. Starting Code Embedding Generation (CodeBERT) on Sample ---")
-    df_sample['embedding'] = df_sample['code'].progress_apply(lambda x: get_code_embedding(x))
+    # --- Embedding Generation with Joblib Parallelization ---
+    print(f"\n--- 3. Starting Code Embedding Generation (CodeBERT) with {N_JOBS} parallel workers ---")
+    
+    # Initialize the model once here (Note: joblib will often re-initialize in workers)
+    # The actual parallel execution:
+    # 1. Use joblib's Parallel to run tasks concurrently.
+    # 2. Use 'delayed' to specify the function and arguments for each task.
+    # 3. The `__init__` function is a helper to ensure the model/tokenizer is present in each worker.
+    
+    # Use Parallel with a helper function to initialize model/tokenizer per joblib worker
+    all_embeddings = Parallel(n_jobs=N_JOBS)(
+        delayed(lambda code: get_code_embedding(code, *init_model()))(code)
+        for code in tqdm(df_sample['code'], desc="Embedding Generation")
+    )
 
-    # Prepare Data for UMAP
+    df_sample['embedding'] = all_embeddings
+
+
+    # Prepare Data for UMAP (Rest of the script is unchanged)
     X_raw = np.stack(df_sample['embedding'].values)
     non_zero_mask = ~np.all(X_raw == 0, axis=1) 
     X = X_raw[non_zero_mask] 
     
+    if X.shape[0] == 0:
+        print("\nFATAL ERROR: All sampled embeddings resulted in zero vectors. Cannot run UMAP.")
+        sys.exit(1)
+
     # Run UMAP only on non-zero vectors
     print("\n--- 4. Applying UMAP for 2D Projection ---")
     reducer = umap.UMAP(n_components=2, random_state=42, n_neighbors=30, min_dist=0.1)
@@ -133,7 +147,6 @@ if __name__ == "__main__":
     
     # --- SAVE ONLY EMBEDDING RESULTS + ID ---
     output_cols = ['id', 'author_type', 'model', 'UMAP 1', 'UMAP 2']
-    
     output_filename = "results/sample_embeddings.csv"
     df_final[output_cols].to_csv(output_filename, index=False)
 

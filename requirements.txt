@@ -12,3 +12,4 @@ umap-learn
 pandas
 tqdm
 psutil
+joblib
