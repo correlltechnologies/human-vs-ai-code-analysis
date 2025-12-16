@@ -1,19 +1,24 @@
+# Save this as 03_visualize.py
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings 
 import os
+import sys
 
 # Silences the Seaborn FutureWarning for cleaner output
 warnings.filterwarnings("ignore", category=FutureWarning, module='seaborn')
 
-# Load the processed data
+# --- 1. Load Data ---
+
 try:
-    df = pd.read_csv("analysis_data.csv")
-    print(f"Data loaded successfully: {len(df)} records.")
+    df = pd.read_csv("results/analysis_data.csv")
+    print(f"Data loaded successfully from results/analysis_data.csv: {len(df)} records.")
 except FileNotFoundError:
-    print("Error: 'analysis_data.csv' not found. Please run 01_style_analysis.py first.")
-    exit()
+    print("\nERROR: 'results/analysis_data.csv' not found.")
+    print("Please run 01_extract_features.py AND 02_generate_embeddings.py first.")
+    sys.exit(1)
 
 # Set style
 sns.set_theme(style="whitegrid")
@@ -58,6 +63,7 @@ def plot_boxplot(data, metric, title, filename):
     plt.close() # Close plot to free memory
     print(f"  - Saved {filename}")
 
+
 # Generate umap scatter plot
 def plot_umap(data, filename="umap_clustering.png"):
     plt.figure(figsize=(10, 8))
@@ -81,19 +87,17 @@ def plot_umap(data, filename="umap_clustering.png"):
     plt.close()
     print(f"  - Saved {filename}") 
 
-# Main loop to generate visualizations
+# --- Main loop to generate visualizations ---
 
 # Box Plots
-print("\nGenerating Box Plots (6 files)")
+print("\n--- Generating Box Plots (6 files) ---")
 for metric, title in VIZ_METRICS:
-    # Create a filename from the metric name
     filename = f"{metric.replace('_per_100_loc', '_norm').lower()}_boxplot.png"
     plot_boxplot(df, metric, title, filename)
 
 
 # UMAP Plot
-print("\nGenerating Embedding Plot (1 file)")
+print("\n--- Generating Embedding Plot (1 file) ---")
 plot_umap(df)
-# 
 
-print("\nVisualization complete. 7 charts saved as PNG files.")
+print("\nVisualization complete. All 7 charts saved as individual PNG files.")
