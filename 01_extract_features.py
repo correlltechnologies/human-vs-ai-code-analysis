@@ -1,5 +1,3 @@
-# Save this as 01_extract_features.py
-
 import numpy as np
 import pandas as pd
 from datasets import load_dataset
@@ -8,12 +6,11 @@ import ast
 from tqdm.auto import tqdm
 import os
 import warnings
-import psutil # For core count
+import psutil
 
 # Register tqdm with pandas
 tqdm.pandas()
 
-# --- Optimization ---
 # Set PyTorch/MKL thread count explicitly to maximize CPU usage
 NUM_THREADS = psutil.cpu_count(logical=False) 
 if NUM_THREADS is None:
@@ -21,13 +18,11 @@ if NUM_THREADS is None:
 os.environ['OMP_NUM_THREADS'] = str(NUM_THREADS) 
 os.environ['MKL_NUM_THREADS'] = str(NUM_THREADS) 
 print(f"Set OMP/MKL thread count to: {NUM_THREADS} cores.")
-# --- End Optimization ---
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
-
-# Load and structure data
+# Load and structure data from huggingface dataset
 def load_and_structure_data():
     dataset = load_dataset("OSS-forge/HumanVsAICode", split="train")
     raw_df = dataset.to_pandas()
@@ -76,7 +71,7 @@ def extract_features(code):
 
         return pd.Series({
             "code": code, # Keep code for the next script
-            "author_type": None, # Will be set below
+            "author_type": None, # Will be set below (human or ai)
             "loc": loc,
             "avg_line_len": avg_line_len,
             "comment_density": comment_density,
@@ -88,19 +83,16 @@ def extract_features(code):
         })
 
     except Exception:
-        # Note: Return the code column in the failure case as well
+        # Return the code column in the failure case as well
         return pd.Series({k: (code if k == 'code' else 0) for k in ["code", "author_type", "loc", "avg_line_len", "comment_density", "indent_depth", "function_count", "var_name_len", "avg_cyclomatic", "total_cyclomatic"]})
-
-
-# REVISED if __name__ == "__main__": block for 01_extract_features.py
 
 if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
-    print("\n--- 1. Loading and Structuring Data ---")
+    print("\nLoading and Structuring Data")
     df = load_and_structure_data() # df now contains 'author_type', 'model', and 'code'
     
-    # --- Feature Extraction with Progress Bar ---
-    print("\n--- 2. Starting Feature Extraction (Structural and Complexity Metrics) ---")
+    # Feature Extraction with Progress Bar
+    print("\nStarting Feature Extraction (Structural and Complexity Metrics)")
     
     # Apply features. features_df contains the extracted metrics.
     features_df = df["code"].progress_apply(extract_features) 
@@ -116,10 +108,7 @@ if __name__ == "__main__":
     df["funcs_per_100_loc"] = (df["function_count"] / df["loc"]) * 100
     
     # Save the data
-    # >>>>> CRITICAL CHANGE: Added 'model' to output_cols <<<<<
     output_cols = ['author_type', 'model', 'code', 'loc', 'avg_line_len', 'comment_density', 'indent_depth', 'function_count', 'var_name_len', 'avg_cyclomatic', 'total_cyclomatic', 'complexity_per_100_loc', 'funcs_per_100_loc']
-    
-    # This line will now work because 'code' has been retained in df
     df[output_cols].to_csv("results/structural_features.csv", index=False)
 
     print(f"\nData processing complete. Structural features saved to results/structural_features.csv ({len(df)} records).")

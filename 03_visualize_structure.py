@@ -1,20 +1,16 @@
-# Save this as 03_visualize.py
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings 
 import os
 import sys
-import scipy.stats as stats # New import for statistical testing
+import scipy.stats as stats
 
 # Silences the Seaborn FutureWarning for cleaner output
 warnings.filterwarnings("ignore", category=FutureWarning, module='seaborn')
 
-# --- 1. Load and Merge Data (Same as before, relies on structural_features.csv containing 'model') ---
-
 try:
-    # 1. Load Structural Features (Full Dataset)
+    # Load Structural Features (Full Dataset)
     # This file MUST contain the grouping columns ('author_type' and 'model').
     df_struct = pd.read_csv("results/structural_features.csv")
     
@@ -24,9 +20,6 @@ try:
     
     print(f"Loaded structural features (full set): {len(df_struct)} records.")
 
-    # --- SIMPLIFICATION: Removed the merge operation ---
-    # Since UMAP data is now handled separately, the final data for box plots
-    # is just the structural data.
     df_final = df_struct.copy() 
     
     # df_boxplot: The full structural dataset (used for violin plots)
@@ -58,22 +51,20 @@ VIZ_METRICS = [
     ("var_name_len", "Avg Variable Name Length")
 ]
 
-### --- New: Statistical Testing Function ---
+
 def run_mann_whitney_u_test(data, metric):
-    """Performs Mann-Whitney U test between Human and AI distributions."""
     human_data = data[data['author_type'] == 'human'][metric].dropna()
     ai_data = data[data['author_type'] == 'ai'][metric].dropna()
     
     # Filter out zeros/extremes for cleaner testing if data size is sufficient
-    # We'll use all non-NaN data for robustness.
     
-    if len(human_data) < 20 or len(ai_data) < 20: # Arbitrary minimum sample size
+    if len(human_data) < 20 or len(ai_data) < 20: # Minimum sample size
         return "N/A (Insufficient Data)"
 
-    # Mann-Whitney U test (non-parametric, ideal for comparing distributions not assumed to be normal)
+    # Mann-Whitney U test
     u_statistic, p_value = stats.mannwhitneyu(human_data, ai_data, alternative='two-sided')
     
-    # We primarily care about the p-value
+    # We care about the p-value
     if p_value < 0.001:
         return f"p < 0.001 (Highly Significant)"
     elif p_value < 0.05:
@@ -81,10 +72,7 @@ def run_mann_whitney_u_test(data, metric):
     else:
         return f"p = {p_value:.3f} (Not Significant)"
 
-### --- Enhanced Visualization Functions ---
-
 def plot_violin_vs_author_type(data, metric, title, filename):
-    """Compares Human vs AI using a Violin Plot for better distribution visualization."""
     plt.figure(figsize=(8, 6))
     
     # Filter outliers for readable graphs
@@ -114,7 +102,6 @@ def plot_violin_vs_author_type(data, metric, title, filename):
 
 
 def plot_violin_vs_model(data, metric, title, filename):
-    """Compares all four sources (Human, Chat, Deepseek, Qwen) using a Violin Plot."""
     plt.figure(figsize=(10, 6))
     
     q_high = data[metric].quantile(0.98)
@@ -124,7 +111,7 @@ def plot_violin_vs_model(data, metric, title, filename):
         data=plot_data, 
         x="model", 
         y=metric, 
-        palette=["#34a853", "#4285f4", "#ea4335", "#fbbc05"], # Google-like colors for clarity
+        palette=["#34a853", "#4285f4", "#ea4335", "#fbbc05"],
         inner="quartile",
         order=['human', 'chatgpt', 'deepseek', 'qwen']
     )
@@ -137,18 +124,15 @@ def plot_violin_vs_model(data, metric, title, filename):
     plt.close() 
     print(f"  - Saved {filename}")
 
-
-# --- Main loop to generate visualizations ---
-
-# 1. Violin Plots (Human vs AI) - Uses the full structural dataset (df_boxplot)
-print("\n--- Generating Violin Plots (6 files, Human vs AI, Full Structural Dataset) ---")
+# Violin Plots (Human vs AI) - Uses the full structural dataset (df_boxplot)
+print("\nGenerating Violin Plots (6 files, Human vs AI, Full Structural Dataset)")
 for metric, title in VIZ_METRICS:
     filename = f"{metric.replace('_per_100_loc', '_norm').lower()}_violin_authortype.png"
     plot_violin_vs_author_type(df_boxplot, metric, title, filename)
 
 
-# 2. Violin Plots (Comparison by Specific Model) - Uses the full structural dataset (df_boxplot)
-print("\n--- Generating Violin Plots (6 files, Model Comparison, Full Structural Dataset) ---")
+# Violin Plots (Comparison by Specific Model) - Uses the full structural dataset (df_boxplot)
+print("\nGenerating Violin Plots (6 files, Model Comparison, Full Structural Dataset)")
 for metric, title in VIZ_METRICS:
     filename = f"{metric.replace('_per_100_loc', '_norm').lower()}_violin_model.png"
     plot_violin_vs_model(df_boxplot, metric, title, filename)

@@ -1,5 +1,3 @@
-# Save this as 03_plot_umap.py
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -20,20 +18,15 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 print(f"Saving plots to directory: {OUTPUT_DIR}")
 
 
-# --- UMAP Plotting Function (FIXED FOR SCALE, TICKS, AND SIZE) ---
+# UMAP Plotting Function
 def plot_umap(data, hue_col='author_type', filename="umap_clustering_authortype.png", title_suffix="Author Type"):
-    """
-    Generates a UMAP scatter plot, configurable by 'author_type' or 'model', 
-    with dynamic axis scaling and explicit 0.5 tick increments, saved at high resolution.
-    """
     if data.empty:
         print(f"\nSkipping UMAP plot ({hue_col}): Sample data is empty.")
         return
-        
-    # --- CHANGE 1: INCREASED FIGURE SIZE FOR LARGER PLOT ---
+
     plt.figure(figsize=(14, 12)) 
     
-    # Define distinct color palettes and order for the two plots
+    # Define color palettes and order for the two plots
     if hue_col == 'author_type':
         palette = {'human': 'darkorange', 'ai': 'dodgerblue'}
         hue_order = ['human', 'ai'] 
@@ -53,7 +46,6 @@ def plot_umap(data, hue_col='author_type', filename="umap_clustering_authortype.
         linewidth=0 
     )
 
-    # --- AXIS LIMITS AND TICK CONTROL (as previously fixed) ---
     x_min, x_max = data['UMAP 1'].min(), data['UMAP 1'].max()
     y_min, y_max = data['UMAP 2'].min(), data['UMAP 2'].max()
     
@@ -80,7 +72,6 @@ def plot_umap(data, hue_col='author_type', filename="umap_clustering_authortype.
     plt.title(f'Code Style Clustering (UMAP) - Colored by {title_suffix} (Sampled Data)', fontweight='bold')
     plt.legend(title=title_suffix)
     plt.tight_layout()
-    # --- CHANGE 2: INCREASED DPI FOR HIGHER RESOLUTION OUTPUT ---
     plt.savefig(os.path.join(OUTPUT_DIR, filename), dpi=600)
     plt.close()
     print(f"  - Saved {filename}") 
@@ -88,7 +79,6 @@ def plot_umap(data, hue_col='author_type', filename="umap_clustering_authortype.
 
 if __name__ == "__main__":
     
-    # --- 1. Load Data ---
     try:
         df_umap = pd.read_csv("results/sample_embeddings.csv")
         
@@ -103,19 +93,16 @@ if __name__ == "__main__":
         
     except FileNotFoundError as e:
         print(f"\nERROR: Could not find required file: {e.filename}")
-        print("Please ensure 02_generate_embeddings_sample.py has run successfully.")
+        print("Please ensure 02_generate_embeddings.py has run successfully.")
         sys.exit(1)
 
-
-    # --- 2. Generate UMAP Plots ---
-
     # UMAP Plot (Author Type - Human vs AI) 
-    print("\n--- Generating Embedding Plot (UMAP by Author Type) ---")
+    print("\nGenerating Embedding Plot (UMAP by Author Type)")
     plot_umap(df_umap, hue_col='author_type', filename="umap_clustering_authortype.png", title_suffix="Author Type (Human vs AI)")
 
 
     # UMAP Plot (Model - Human vs 3 AIs)
-    print("\n--- Generating Embedding Plot (UMAP by Specific Model) ---")
+    print("\nGenerating Embedding Plot (UMAP by Specific Model)")
     plot_umap(df_umap, hue_col='model', filename="umap_clustering_model.png", title_suffix="Specific Model (Human vs 3 AIs)")
 
     print("\nVisualization complete. UMAP charts saved as individual PNG files.")
